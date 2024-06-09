@@ -1,0 +1,11 @@
+Payment_ID,User_ID,Amount,Date,Method
+1,98,386.91,1992-02-28,Maestro
+2,44,61.79,2010-01-08,American Express
+3,14,45.76,1992-12-09,American Express
+4,14,332.48,2017-04-23,VISA 16 digit
+5,61,41.43,1975-10-23,Diners Club / Carte Blanche
+6,76,391.94,2009-04-19,JCB 16 digit
+7,13,450.33,1985-07-01,Maestro
+8,15,87.21,2024-03-08,JCB 16 digit
+9,14,216.69,2018-04-15,VISA 16 digit
+10,28,470.77,1992-11-23,Discover

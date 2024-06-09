@@ -1,0 +1,11 @@
+Payment_ID,User_ID,Amount,Date,Method
+1,32,179.78,2020-08-21,VISA 19 digit
+2,12,407.2,2014-09-10,Discover
+3,54,315.48,2023-10-26,JCB 16 digit
+4,55,84.36,2011-03-18,JCB 16 digit
+5,58,99.85,2022-01-22,VISA 16 digit
+6,39,410.23,2002-01-31,American Express
+7,60,36.14,1992-04-27,VISA 16 digit
+8,74,192.77,2012-10-24,Discover
+9,10,437.74,2016-05-08,Maestro
+10,67,87.32,2022-05-27,Maestro
