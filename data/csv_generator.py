@@ -14,8 +14,8 @@ num_tracks = num_albums*7
 num_playlists = 10
 num_likes = 20
 num_premium_features = 3
-num_subscription_plans = 2
-num_payments = 10
+num_subscription_plans = 3
+num_payments = num_users*num_subscription_plans
 
 # Generate data for each table
 def generate_users():
@@ -54,12 +54,12 @@ def data_to_csv(data, filename):
         dict_writer.writerows(data)
 
 # Generate and write data
-data_to_csv(generate_users(), 'Users.csv')
-data_to_csv(generate_artists(), 'Artists.csv')
-data_to_csv(generate_albums(), 'Albums.csv')
-data_to_csv(generate_tracks(), 'Tracks.csv')
-data_to_csv(generate_playlists(), 'Playlists.csv')
-data_to_csv(generate_likes(), 'Likes.csv')
-data_to_csv(generate_premium_features(), 'PremiumFeatures.csv')
-data_to_csv(generate_subscription_plans(), 'SubscriptionPlans.csv')
-data_to_csv(generate_payments(), 'Payments.csv')
+data_to_csv(generate_users(), 'data\\Users.csv')
+data_to_csv(generate_artists(), 'data\\Artists.csv')
+data_to_csv(generate_albums(), 'data\\Albums.csv')
+data_to_csv(generate_tracks(), 'data\\Tracks.csv')
+data_to_csv(generate_playlists(), 'data\\Playlists.csv')
+data_to_csv(generate_likes(), 'data\\Likes.csv')
+data_to_csv(generate_premium_features(), 'data\\PremiumFeatures.csv')
+data_to_csv(generate_subscription_plans(), 'data\\SubscriptionPlans.csv')
+data_to_csv(generate_payments(), 'data\\Payments.csv')

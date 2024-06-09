@@ -106,10 +106,11 @@ def prepare_fact_streaming(track_data, dim_time):
     
     return track_data[['startdate', 'trackid', 'dateid', 'playcount', 'listeningtime']]
 
-def prepare_fact_subscription(subscription_data):
+def prepare_fact_subscription(subscription_data, payment_data):
     """Prepare the subscription fact table using subscription plan data."""
     logging.info("Preparing fact_subscription table")
     subscription_data['monthlyfee'] = subscription_data['price']
+    subscription_data['startdate'] = datetime.now().date()
     return subscription_data[['startdate', 'dateid', 'subscriptionplanid', 'monthlyfee']]
 
 def main():
@@ -119,6 +120,7 @@ def main():
     albums = extract_table("album", oltp_engine)
     tracks = extract_table("track", oltp_engine)
     sub_plans = extract_table("subscriptionplan", oltp_engine)
+    payment = extract_table("payment", oltp_engine)
 
     
 
