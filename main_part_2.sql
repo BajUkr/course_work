@@ -6,7 +6,7 @@ CREATE TABLE "dim_user" (
     startdate date,
     enddate date,
     iscurrent boolean,
-    PRIMARY KEY (userid, startdate)
+    PRIMARY KEY (userid, startdate, enddate, iscurrent)
 );
 
 CREATE TABLE "dim_artist" (
@@ -24,6 +24,7 @@ CREATE TABLE "dim_album" (
 CREATE TABLE "dim_track" (
     trackid int PRIMARY KEY,
     title varchar(255),
+	playcount int,
     duration interval
 );
 
@@ -39,95 +40,90 @@ CREATE TABLE "dim_time" (
 -- Fact Tables
 -- Adjust Fact_Streaming to include StartDate
 CREATE TABLE "fact_streaming" (
-    userid int,
-    startdate date,
     trackid int,
-    dateid int,
     playcount int,
     listeningtime bigint,
-    FOREIGN KEY (userid, startdate) REFERENCES "dim_user" (userid, startdate),
-    FOREIGN KEY (trackid) REFERENCES "dim_track" (trackid),
-    FOREIGN KEY (dateid) REFERENCES "dim_time" (dateid)
+    FOREIGN KEY (trackid) REFERENCES "dim_track" (trackid)
 );
 
 -- Adjust Fact_Subscription to include StartDate
 CREATE TABLE "fact_subscription" (
     userid int,
     startdate date,
+	enddate date,
+	iscurrent bool,
     dateid int,
     subscriptionplanid int,
     monthlyfee decimal(10,2),
-    FOREIGN KEY (userid, startdate) REFERENCES "dim_user" (userid, startdate),
+    FOREIGN KEY (userid, startdate, enddate, iscurrent) REFERENCES "dim_user" (userid, startdate, enddate, iscurrent),
     FOREIGN KEY (dateid) REFERENCES "dim_time" (dateid)
 );
 
-CREATE INDEX idx_user ON "fact_streaming"(userid);
 CREATE INDEX idx_track ON "fact_streaming"(trackid);
-CREATE INDEX idx_date ON "fact_streaming"(dateid);
 CREATE INDEX idx_subscription_date ON "fact_subscription"(dateid);
 CREATE INDEX idx_subscription_user ON "fact_subscription"(userid);
 
 -- QUERIES EXMAPLES
 
 -- Monthly Active Users
-SELECT t.Year, t.Month, COUNT(DISTINCT f.UserID) AS MonthlyActiveUsers
-FROM Fact_Streaming f
-JOIN Dim_Time t ON f.DateID = t.DateID
-GROUP BY t.Year, t.Month;
+SELECT t.year, t.month, COUNT(DISTINCT f.userid) AS MonthlyActiveUsers
+FROM fact_streaming f
+JOIN dim_time t ON f.dateid = t.dateid
+GROUP BY t.year, t.month;
 
 -- Revenue by Subscription Plan and Month
-SELECT t.Year, t.Month, SUM(f.MonthlyFee) AS TotalRevenue
-FROM Fact_Subscription f
-JOIN Dim_Time t ON f.DateID = t.DateID
-GROUP BY t.Year, t.Month;
+SELECT t.year, t.month, SUM(f.monthlyfee) AS TotalRevenue
+FROM fact_subscription f
+JOIN dim_time t ON f.dateid = t.dateid
+GROUP BY t.year, t.month;
 
 -- Top Tracks by Play Count
-SELECT d.TrackID, d.Title, SUM(f.PlayCount) AS TotalPlays
-FROM Fact_Streaming f
-JOIN Dim_Track d ON f.TrackID = d.TrackID
-JOIN Dim_Time t ON f.DateID = t.DateID
-WHERE t.Date BETWEEN '2023-01-01' AND '2023-12-31'
-GROUP BY d.TrackID, d.Title
+SELECT d.trackid, d.title, SUM(f.playcount) AS TotalPlays
+FROM fact_streaming f
+JOIN dim_track d ON f.trackid = d.trackid
+JOIN dim_time t ON f.dateid = t.dateid
+WHERE t.date BETWEEN '2023-01-01' AND '2023-12-31'
+GROUP BY d.trackid, d.title
 ORDER BY TotalPlays DESC
 LIMIT 10;
 
 -- Revenue Generation by Artist
-SELECT a.ArtistID, a.Name, SUM(s.MonthlyFee) AS TotalRevenue
-FROM Fact_Subscription s
-JOIN Dim_User u ON s.UserID = u.UserID
-JOIN Fact_Streaming fs ON s.UserID = fs.UserID
-JOIN Dim_Track dt ON fs.TrackID = dt.TrackID
-JOIN Dim_Artist a ON dt.ArtistID = a.ArtistID
-GROUP BY a.ArtistID, a.Name
+SELECT a.artistid, a.name, SUM(s.monthlyfee) AS TotalRevenue
+FROM fact_subscription s
+JOIN dim_user u ON s.userid = u.userid AND s.startdate = u.startdate
+JOIN fact_streaming fs ON s.userid = fs.userid AND s.startdate = fs.startdate
+JOIN dim_track dt ON fs.trackid = dt.trackid
+JOIN dim_artist a ON dt.artistid = a.artistid
+GROUP BY a.artistid, a.name
 ORDER BY TotalRevenue DESC;
 
 -- User Engagement by Month
-SELECT t.Year, t.Month, COUNT(DISTINCT f.UserID) AS ActiveUsers, SUM(f.ListeningTime) AS TotalListeningTime
-FROM Fact_Streaming f
-JOIN Dim_Time t ON f.DateID = t.DateID
-GROUP BY t.Year, t.Month
-ORDER BY t.Year, t.Month;
+SELECT t.year, t.month, COUNT(DISTINCT f.userid) AS ActiveUsers, SUM(f.listeningtime) AS TotalListeningTime
+FROM fact_streaming f
+JOIN dim_time t ON f.dateid = t.dateid
+GROUP BY t.year, t.month
+ORDER BY t.year, t.month;
 
 -- Subscription Plan Performance
-SELECT sp.SubscriptionPlanID, sp.Name, COUNT(DISTINCT fs.UserID) AS SubscriberCount, SUM(fs.MonthlyFee) AS TotalRevenue
-FROM Fact_Subscription fs
-JOIN SubscriptionPlan sp ON fs.SubscriptionPlanID = sp.SubscriptionPlanID
-GROUP BY sp.SubscriptionPlanID, sp.Name
+-- Assuming a table "subscription_plan" exists
+SELECT sp.subscriptionplanid, sp.name, COUNT(DISTINCT fs.userid) AS SubscriberCount, SUM(fs.monthlyfee) AS TotalRevenue
+FROM fact_subscription fs
+JOIN subscription_plan sp ON fs.subscriptionplanid = sp.subscriptionplanid
+GROUP BY sp.subscriptionplanid, sp.name
 ORDER BY TotalRevenue DESC;
 
 -- Growth of User Base Over Time
-SELECT t.Year, t.Month, COUNT(DISTINCT u.UserID) AS NewUsers
-FROM Dim_User u
-JOIN Dim_Time t ON u.StartDate = t.Date
-GROUP BY t.Year, t.Month
-ORDER BY t.Year, t.Month;
+SELECT t.year, t.month, COUNT(DISTINCT u.userid) AS NewUsers
+FROM dim_user u
+JOIN dim_time t ON u.startdate = t.date
+GROUP BY t.year, t.month
+ORDER BY t.year, t.month;
 
 -- Artist Popularity Trend
-SELECT a.Name, t.Year, t.Month, SUM(f.PlayCount) AS TotalPlays
-FROM Fact_Streaming f
-JOIN Dim_Track dt ON f.TrackID = dt.TrackID
-JOIN Dim_Artist a ON dt.ArtistID = a.ArtistID
-JOIN Dim_Time t ON f.DateID = t.DateID
-GROUP BY a.Name, t.Year, t.Month
-ORDER BY a.Name, t.Year, t.Month;
-
+SELECT a.name, t.year, t.month, SUM(f.playcount) AS TotalPlays
+FROM fact_streaming f
+JOIN dim_track dt ON f.trackid = dt.trackid
+JOIN dim_artist a ON dt.artistid = a.artistid
+JOIN dim_time t ON f.dateid = t.dateid
+GROUP BY a.name, t.year, t.month
+ORDER BY a.name, t.year, t.month;

@@ -77,8 +77,10 @@ CREATE TABLE "payment" (
     user_id int,
     amount decimal(10,2),
     date date,
+	subscription_plan_id int,
     method varchar(50),
-    FOREIGN KEY (user_id) REFERENCES "user"(userid)
+    FOREIGN KEY (user_id) REFERENCES "user"(userid),
+	FOREIGN KEY (subscription_plan_id) REFERENCES "subscriptionplan"(subscription_plan_id)
 );
 
 -- Functions and procedures

@@ -2,6 +2,7 @@ import pandas as pd
 from sqlalchemy import create_engine
 from datetime import datetime
 import logging
+import numpy as np
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -51,14 +52,18 @@ def transform_and_load(df, table_name, engine, key_columns):
     else:
         logging.info(f"No new data to load into {table_name}")
 
-def prepare_dim_user(users):
+def prepare_dim_user(users, payments, subscription_plans):
     """Prepare the user dimension table."""
     logging.info("Preparing dim_user table")
-    users['startdate'] = datetime.now().date()
-    users['enddate'] = None
-    users['iscurrent'] = True
-    return users[['userid', 'username', 'email', 'startdate', 'enddate', 'iscurrent']]
+    # Group payments by user_id and get the earliest payment date for each user
+    first_payment_dates = payments.groupby('user_id')['date'].min().reset_index()
+    first_payment_dates.rename(columns={'date': 'startdate', 'user_id': 'userid'}, inplace=True)
 
+    # Merge the earliest payment date with the users dataframe
+    users = users.merge(first_payment_dates, on='userid', how='left')
+    users['iscurrent'] = users['enddate'].isna()
+
+    return users[['userid', 'username', 'email', 'startdate', 'enddate', 'iscurrent']]
 def prepare_dim_artist(artists):
     """Prepare the artist dimension table."""
     logging.info("Preparing dim_artist table")
@@ -72,7 +77,7 @@ def prepare_dim_album(albums):
 def prepare_dim_track(tracks):
     """Prepare the track dimension table."""
     logging.info("Preparing dim_track table")
-    return tracks[['trackid', 'title', 'duration']]
+    return tracks[['trackid', 'title', 'playcount', 'duration']]
 
 def prepare_dim_time(min_date, max_date):
     """Prepare the time dimension table."""
@@ -109,9 +114,11 @@ def prepare_fact_streaming(track_data, dim_time):
 def prepare_fact_subscription(subscription_data, payment_data):
     """Prepare the subscription fact table using subscription plan data."""
     logging.info("Preparing fact_subscription table")
-    subscription_data['monthlyfee'] = subscription_data['price']
+    subscription_data['userid'] = payment_data['user_id']
     subscription_data['startdate'] = datetime.now().date()
-    return subscription_data[['startdate', 'dateid', 'subscriptionplanid', 'monthlyfee']]
+    subscription_data['subscriptionplanid'] = payment_data['subscriptionplanid']
+    subscription_data['monthlyfee'] = subscription_data['price']
+    return subscription_data[['userid', 'startdate', 'dateid', 'subscriptionplanid', 'monthlyfee']]
 
 def main():
     # Extract data from OLTP
@@ -120,12 +127,12 @@ def main():
     albums = extract_table("album", oltp_engine)
     tracks = extract_table("track", oltp_engine)
     sub_plans = extract_table("subscriptionplan", oltp_engine)
-    payment = extract_table("payment", oltp_engine)
+    payments = extract_table("payment", oltp_engine)
 
     
 
     # Prepare and load dimension tables into OLAP
-    transform_and_load(prepare_dim_user(users), "dim_user", olap_engine, ['userid', 'startdate'])
+    transform_and_load(prepare_dim_user(users, payments, sub_plans), "dim_user", olap_engine, ['userid', 'startdate'])
     transform_and_load(prepare_dim_artist(artists), "dim_artist", olap_engine, ['artistid'])
     transform_and_load(prepare_dim_album(albums), "dim_album", olap_engine, ['albumid'])
     transform_and_load(prepare_dim_track(tracks), "dim_track", olap_engine, ['trackid'])
@@ -142,7 +149,7 @@ def main():
     transform_and_load(fact_streaming, "fact_streaming", olap_engine, ['userid', 'trackid', 'dateid'])
 
     # Prepare and load fact_subscription
-    fact_subscription = prepare_fact_subscription(sub_plans)
+    fact_subscription = prepare_fact_subscription(sub_plans, payments)
     transform_and_load(fact_subscription, "fact_subscription", olap_engine, ['userid', 'dateid', 'subscriptionplanid'])
 
 

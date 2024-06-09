@@ -14,7 +14,7 @@ num_tracks = num_albums*7
 num_playlists = 10
 num_likes = 20
 num_premium_features = 3
-num_subscription_plans = 3
+num_subscription_plans = 4
 num_payments = num_users*num_subscription_plans
 
 # Generate data for each table
@@ -40,10 +40,10 @@ def generate_premium_features():
     return [{'Premium_Feature_ID': i, 'Name': fake.word()} for i in range(1, num_premium_features + 1)]
 
 def generate_subscription_plans():
-    return [{'Subscription_Plan_ID': i, 'Name': fake.word(), 'Price': round(random.uniform(10.0, 100.0), 2), 'Description': fake.text()} for i in range(1, num_subscription_plans + 1)]
-
+    plan_names = ['Free', 'Student', 'Premium', 'Family']
+    return [{'Subscription_Plan_ID': i+1, 'Name': plan_names[i], 'Price': i*5, 'Description': fake.text()} for i in range(len(plan_names))]
 def generate_payments():
-    return [{'Payment_ID': i, 'User_ID': random.randint(1, num_users), 'Amount': round(random.uniform(5.0, 500.0), 2), 'Date': fake.date(), 'Method': fake.credit_card_provider()} for i in range(1, num_payments + 1)]
+    return [{'Payment_ID': i, 'User_ID': random.randint(1, num_users), 'Amount': random.randint(1,77)*25, 'Date': fake.date(), 'Subscription_Plan_ID': random.randint(2, num_subscription_plans),'Method': fake.credit_card_provider()} for i in range(1, num_payments + 1)]
 
 # Write data to CSV files
 def data_to_csv(data, filename):
@@ -54,12 +54,12 @@ def data_to_csv(data, filename):
         dict_writer.writerows(data)
 
 # Generate and write data
-data_to_csv(generate_users(), 'data\\Users.csv')
-data_to_csv(generate_artists(), 'data\\Artists.csv')
-data_to_csv(generate_albums(), 'data\\Albums.csv')
-data_to_csv(generate_tracks(), 'data\\Tracks.csv')
-data_to_csv(generate_playlists(), 'data\\Playlists.csv')
-data_to_csv(generate_likes(), 'data\\Likes.csv')
-data_to_csv(generate_premium_features(), 'data\\PremiumFeatures.csv')
-data_to_csv(generate_subscription_plans(), 'data\\SubscriptionPlans.csv')
-data_to_csv(generate_payments(), 'data\\Payments.csv')
+data_to_csv(generate_users(), 'C:\\Program Files\\PostgreSQL\\16\\data\\course_work_data\\Users.csv')
+data_to_csv(generate_artists(), 'C:\\Program Files\\PostgreSQL\\16\\data\\course_work_data\\Artists.csv')
+data_to_csv(generate_albums(), 'C:\\Program Files\\PostgreSQL\\16\\data\\course_work_data\\Albums.csv')
+data_to_csv(generate_tracks(), 'C:\\Program Files\\PostgreSQL\\16\\data\\course_work_data\\Tracks.csv')
+data_to_csv(generate_playlists(), 'C:\\Program Files\\PostgreSQL\\16\\data\\course_work_data\\Playlists.csv')
+data_to_csv(generate_likes(), 'C:\\Program Files\\PostgreSQL\\16\\data\\course_work_data\\Likes.csv')
+data_to_csv(generate_premium_features(), 'C:\\Program Files\\PostgreSQL\\16\\data\\course_work_data\\PremiumFeatures.csv')
+data_to_csv(generate_subscription_plans(), 'C:\\Program Files\\PostgreSQL\\16\\data\\course_work_data\\SubscriptionPlans.csv')
+data_to_csv(generate_payments(), 'C:\\Program Files\\PostgreSQL\\16\\data\\course_work_data\\Payments.csv')
