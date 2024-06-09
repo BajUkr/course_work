@@ -3,6 +3,7 @@ from sqlalchemy import create_engine
 from datetime import datetime
 import logging
 import numpy as np
+from dateutil.relativedelta import relativedelta
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -59,10 +60,39 @@ def prepare_dim_user(users, payments, subscription_plans):
     first_payment_dates = payments.groupby('user_id')['date'].min().reset_index()
     first_payment_dates.rename(columns={'date': 'startdate', 'user_id': 'userid'}, inplace=True)
 
-    # Merge the earliest payment date with the users dataframe
-    users = users.merge(first_payment_dates, on='userid', how='left')
-    users['iscurrent'] = users['enddate'].isna()
+      # Group payments by user_id and get the latest payment date and amount for each user
+    latest_payments = payments.groupby('user_id').agg({
+        'date': 'max', 
+        'amount': 'last',
+        'subscription_plan_id': 'last',
+    }).reset_index()
 
+    # Merge payments with subscription_plans to get the subscription plan price
+    # print(latest_payments)
+    # print(subscription_plans.columns)
+    latest_payments = latest_payments.merge(
+        subscription_plans[['subscription_plan_id', 'price']], 
+        on='subscription_plan_id', 
+        how='left'
+    )
+    # print(latest_payments.columns)
+
+
+    # Calculate the enddate by adding the payment amount divided by the subscription plan price (in months) to the latest payment date
+    latest_payments['months'] = latest_payments['amount'] / latest_payments['price']
+    latest_payments['enddate'] = pd.to_datetime(latest_payments['date']) + \
+                                 pd.to_timedelta((latest_payments['months'] * 30).astype(int), unit='D')
+
+    # Rename columns to match the users dataframe
+    latest_payments.rename(columns={'date': 'startdate', 'user_id': 'userid'}, inplace=True)
+
+    # Merge the latest payment data with the users dataframe
+    users = users.merge(latest_payments[['userid', 'startdate', 'enddate']], on='userid', how='left')
+
+    # Determine if the current date is before the enddate to set iscurrent
+    users['iscurrent'] = pd.to_datetime('now').normalize() <= users['enddate']
+    
+    # print(users.columns)
     return users[['userid', 'username', 'email', 'startdate', 'enddate', 'iscurrent']]
 def prepare_dim_artist(artists):
     """Prepare the artist dimension table."""
@@ -95,7 +125,7 @@ def prepare_dim_time(min_date, max_date):
     return dim_time
 
 
-def prepare_fact_streaming(track_data, dim_time):
+def prepare_fact_streaming(track_data):
     """Prepare the streaming fact table using track data."""
     logging.info("Preparing fact_streaming table")
 
@@ -103,23 +133,29 @@ def prepare_fact_streaming(track_data, dim_time):
     track_data['duration_str'] = track_data['duration'].apply(lambda x: x.strftime('%H:%M:%S'))
     track_data['listeningtime'] = track_data['playcount'] * pd.to_timedelta(track_data['duration_str']).dt.total_seconds()
     track_data['startdate'] = datetime.now().date()
-    track_data['releasedate'] = pd.to_datetime(track_data['releasedate'])
+    track_data['releasedate'] = pd.to_datetime(track_data['releasedate'])    
+    return track_data[['trackid', 'playcount', 'listeningtime']]
 
-    
-    # Map release_date to dateid
-    track_data = track_data.merge(dim_time[['date', 'dateid']], left_on='releasedate', right_on='date', how='left')
-    
-    return track_data[['startdate', 'trackid', 'dateid', 'playcount', 'listeningtime']]
-
-def prepare_fact_subscription(subscription_data, payment_data):
+def prepare_fact_subscription(subscription_data, payment_data, dim_time, dim_user_data):
     """Prepare the subscription fact table using subscription plan data."""
     logging.info("Preparing fact_subscription table")
     subscription_data['userid'] = payment_data['user_id']
-    subscription_data['startdate'] = datetime.now().date()
-    subscription_data['subscriptionplanid'] = payment_data['subscriptionplanid']
+    subscription_data['startdate'] = payment_data['date'].min()
     subscription_data['monthlyfee'] = subscription_data['price']
-    return subscription_data[['userid', 'startdate', 'dateid', 'subscriptionplanid', 'monthlyfee']]
+    subscription_data['dateid'] = dim_time['dateid']
+    subscription_data["enddate"] = subscription_data["startdate"].apply(
+        lambda d: d + relativedelta(months=1))
+    subscription_data['iscurrent'] = subscription_data['enddate'] > datetime.now().date()
+    subscription_data["subscriptionplanid"] = subscription_data["subscription_plan_id"]
 
+    # Match the fact_subscription data with dim_user data
+    subscription_data = subscription_data.merge(
+        dim_user_data[['userid', 'startdate', 'enddate', 'iscurrent']],
+        on=['userid', 'startdate', 'enddate', 'iscurrent'],
+        how='inner'
+    )
+
+    return subscription_data[['userid', 'startdate', 'enddate', "iscurrent", "dateid", 'subscriptionplanid', 'monthlyfee']]
 def main():
     # Extract data from OLTP
     users = extract_table("user", oltp_engine)
@@ -137,6 +173,7 @@ def main():
     transform_and_load(prepare_dim_album(albums), "dim_album", olap_engine, ['albumid'])
     transform_and_load(prepare_dim_track(tracks), "dim_track", olap_engine, ['trackid'])
 
+    dim_user_data = extract_table("dim_user", olap_engine)
     # Prepare and load dim_time
     min_date = tracks['releasedate'].min()
     max_date = tracks['releasedate'].max()
@@ -145,12 +182,12 @@ def main():
 
 
     # Prepare and load fact_streaming
-    fact_streaming = prepare_fact_streaming(tracks, dim_time)
-    transform_and_load(fact_streaming, "fact_streaming", olap_engine, ['userid', 'trackid', 'dateid'])
+    fact_streaming = prepare_fact_streaming(tracks)
+    transform_and_load(fact_streaming, "fact_streaming", olap_engine, ['trackid'])
 
     # Prepare and load fact_subscription
-    fact_subscription = prepare_fact_subscription(sub_plans, payments)
-    transform_and_load(fact_subscription, "fact_subscription", olap_engine, ['userid', 'dateid', 'subscriptionplanid'])
+    # fact_subscription = prepare_fact_subscription(sub_plans, payments, dim_time, dim_user_data)
+    # transform_and_load(fact_subscription, "fact_subscription", olap_engine, ['userid', 'startdate', 'enddate', "iscurrent", 'dateid'])
 
 
     logging.info("ETL process completed successfully.")

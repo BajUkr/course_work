@@ -37,6 +37,8 @@ CREATE TABLE "dim_time" (
 	day int
 );
 
+
+
 -- Fact Tables
 -- Adjust Fact_Streaming to include StartDate
 CREATE TABLE "fact_streaming" (
